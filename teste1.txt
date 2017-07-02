@@ -1,2 +1,3 @@
 ﻿linha 1 teste git
 linha 2 teste git
+linha 3 teste git
