@@ -1,0 +1,72 @@
+<Window x:Class="Presenter.Json.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"       
+        xmlns:local="clr-namespace:Presenter.Json"
+        mc:Ignorable="d"
+        Title="Itau (Projeto Mega Scanner)" Height="504.2" Width="800" WindowStartupLocation="CenterScreen">
+    <Window.Resources>
+        <StackPanel x:Key="MyStackPanel">
+            <TextBlock Name="MainContent" Text="Selecione Arquivo" FontSize="15" />
+            <TextBlock Name="DurationValue" Text="Tempo: 50m" FontSize="12" Foreground="Gainsboro" />
+        </StackPanel>
+        <StackPanel x:Key="btn">
+            <TextBlock Name="btnAtualizar" Text="Atualizar" FontSize="15" />
+            <TextBlock Name="textLivre" Text="Tempo: 50m" FontSize="12" Foreground="Gainsboro" />
+        </StackPanel>
+    </Window.Resources>
+    <Grid Height="Auto" Margin="24,25">
+
+
+        <GroupBox Header="Documentos" HorizontalAlignment="Left"  Height="Auto" Width="794" Margin="0,108,-0.4,0.4">
+
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="80"/>
+                    <RowDefinition Height="5"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="5"/>
+                    <ColumnDefinition Width="5*"/>
+                    <ColumnDefinition Width="10*"/>
+                   
+                </Grid.ColumnDefinitions>
+
+                <Label Content="Projeto Mega Scanner" Grid.ColumnSpan="4" Grid.Row="1" Grid.Column="0" FontSize="40"/>
+                <Label Content="Selecionar Arquivo Json:" Grid.Row="2" Margin="20" FontSize="15"/>
+                <Button Width="200" Height="50" Content="{StaticResource MyStackPanel}" Grid.Row="2" Grid.Column="2" Click="Button_Click" VerticalAlignment="Top" Margin="0,20,0,0" />
+                
+                <DataGrid Grid.Row="4" Name="MegaScannerGrid" Grid.ColumnSpan="4" DataContext="{Binding Documento}" 
+                AutoGenerateColumns="False" CanUserDeleteRows="True"  MouseDoubleClick="DataGrid_MouseDoubleClick" 
+                RowEditEnding="MegaScannerGrid_RowEditEnding" ScrollViewer.CanContentScroll="True" 
+                ScrollViewer.VerticalScrollBarVisibility="Auto"
+                ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="ID" Binding="{Binding ID, NotifyOnTargetUpdated=True,Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="True" />
+                        <DataGridTextColumn Header="TipoDocumento" Binding="{Binding TipoDocumento, NotifyOnTargetUpdated=True,Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="LocalDeGuarda" Binding="{Binding LocalDeGuarda, NotifyOnTargetUpdated=True,Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="NumeroCaixa" Binding="{Binding NumeroCaixa, NotifyOnTargetUpdated=True,Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="True"/>
+                        <DataGridTemplateColumn>
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Button Click="ChangeText" Width="80" Height="30"  Command="{Binding IdDocumento, NotifyOnTargetUpdated=True,Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">Atualizar</Button>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>                
+            </Grid>
+        </GroupBox>
+        
+        <DockPanel HorizontalAlignment="Left" Height="100" LastChildFill="False" Margin="18,10,0,0" VerticalAlignment="Top" Width="100"/>
+        <Image Source="C:\Users\awmac\Desktop\Exemplo MegaScanner\MegaScanner.Json\Presenter.Json\img\logo-itau-fb.png" VerticalAlignment="Top" Height="98"  Margin="8,12,675.6,0"/>
+        
+
+    </Grid>
+</Window>

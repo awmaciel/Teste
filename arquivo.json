@@ -1,0 +1,5 @@
+[
+        {"ID":"7","TipoDocumento":"PAAC","LocalDeGuarda":"Iron","NumeroCaixa":"Caixa 1"},
+        {"ID":"8","TipoDocumento":"Diversos","LocalDeGuarda":"MegaScanner","NumeroCaixa":"Caixa 2"},
+        {"ID":"9","TipoDocumento":"Extratos","LocalDeGuarda":"GM","NumeroCaixa":"Caixa 3"}
+]
