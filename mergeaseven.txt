@@ -1,0 +1,82 @@
+ var result = GetAllFiles(@"C:\Users\awmac\Desktop\Reflections\");
+
+            List<string> fileNames;
+            ListTextPlus(result, @"C:\Users\awmac\Desktop\Reflections\teste\teste.txt", @"C:\Users\awmac\Desktop\Reflections\");       
+
+
+public static List<string> GetAllFiles(string sDirt)
+        {
+            List<string> files = new List<string>();
+
+            try
+            {
+                foreach (string file in Directory.GetFiles(sDirt))
+                {
+                    files.Add(file);
+                }
+                foreach (string fl in Directory.GetDirectories(sDirt))
+                {
+                    files.AddRange(GetAllFiles(fl));
+                }
+            }
+            catch (Exception ex)
+            {
+
+                Console.WriteLine(ex.Message);
+            }
+
+
+
+            return files;
+        }
+
+        public static void ListTextPlus(List<string> fileNames, string outFile, string dirName = @"C:\Users\awmac\Desktop\Reflections\teste2\")
+        {
+            //https://codereview.stackexchange.com/questions/153019/combining-txt-files
+            string Fileout = string.Empty;
+            foreach (var item in fileNames)
+            {
+                string line;
+
+                DirectoryInfo di = new DirectoryInfo(Path.GetDirectoryName(item.ToString()));
+
+                if (di != null && di.Exists)
+                {
+                    bool exists = System.IO.Directory.Exists(@"C: \Users\awmac\Desktop\Reflections\Merge\" + (Path.GetFileNameWithoutExtension(item.ToString())));
+
+                    if (!exists)
+                        System.IO.Directory.CreateDirectory(@"C: \Users\awmac\Desktop\Reflections\Merge\" + (Path.GetFileNameWithoutExtension(item.ToString())));
+
+
+                    Fileout = @"C: \Users\awmac\Desktop\Reflections\Merge\" + Path.GetFileNameWithoutExtension(item.ToString()) + "\\" + Path.GetFileName(item.ToString());
+
+
+                    //if (File.Exists(Fileout))
+                    //{
+                    //    File.Delete(Fileout);
+                    //}
+
+                    using (StreamWriter sw = File.CreateText(Fileout))
+                    {
+                        foreach (FileInfo fi in di.EnumerateFiles("*.txt", SearchOption.TopDirectoryOnly))
+                        {
+                            using (StreamReader sr = fi.OpenText())
+                            {
+                                //all text would be more efficient but line by line is lower memory
+                                while ((line = sr.ReadLine()) != null)
+                                {
+                                    if (!string.IsNullOrEmpty(line))
+                                        sw.WriteLine(line);
+                                }
+
+                                foreach(var linha in fileNames)
+                                {
+                                    sw.WriteLine(linha);
+                                }
+                            }
+                            sw.WriteLine("");
+                        }
+                    }
+                }
+            }
+        }
