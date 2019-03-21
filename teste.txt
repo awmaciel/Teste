@@ -1,0 +1,538 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+
+using System.Drawing;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Windows.Forms;
+using FileImage;
+using IMAPI2.Interop;
+using System.IO;
+using System.Diagnostics;
+using AboutUtil;
+
+namespace ISOBuilder
+{
+    public partial class ISOBuilderForm : Form
+    {
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        static extern bool SetForegroundWindow(IntPtr hWnd);
+        Stopwatch _tm = new Stopwatch();
+        ImageRepository _repository;
+        public ISOBuilderForm()
+        {
+            _repository = new ImageRepository();
+            InitializeComponent();
+        }
+
+        void AsyncFormattingEvent(object o1, object o2)
+        {
+            Invoke(new DiscFormat2Data_EventsHandler(FormattingEvent), new Object[] { o1, o2 });
+        }
+
+        void FormattingEvent(object o1, object o2)
+        {
+            IMAPI2.Interop.IProgressItem it = o1 as IMAPI2.Interop.IProgressItem;
+            int i = (int)(Convert.ToSingle(o2) * 100);
+            this._progBar.Value = 100 + i;
+            if (it != null)
+                this._lblUpdate.Text = string.Format("Formatting {0}", it.Description);
+            if (!_ckWorker.Checked)
+                Application.DoEvents();
+
+
+        }
+        void AsyncRepositoryUpdate(object o1, object o2)
+        {
+            Invoke(new DiscFormat2Data_EventsHandler(RepositoryUpdate), new Object[] { o1, o2 });
+        }
+        void RepositoryUpdate(object o1, object o2)
+        {
+            string file = o1 as string;
+            long i = Convert.ToInt64(o2);
+            int pos = (int)((double)_repository.ActualSize / _repository.SizeBeforeFormatting * 100);
+            _progBar.Value = pos;
+            _lblUpdate.Text = string.Format("Adding {0} size = {1}", file, i);
+            if (!_ckWorker.Checked)
+                Application.DoEvents();
+
+        }
+        private void Form1_Load(object sender, EventArgs e)
+        {
+            try
+            {
+
+                _bindingSource.DataSource = _repository.Items;
+                _dataGridView.DataSource = _bindingSource;
+                //strip the first and last from IMAPI_MEDIA_PHYSICAL_TYPE enum values
+                IMAPI_MEDIA_PHYSICAL_TYPE[] mediatypes = (IMAPI_MEDIA_PHYSICAL_TYPE[])Enum.GetValues(typeof(IMAPI_MEDIA_PHYSICAL_TYPE));
+                List<IMAPI_MEDIA_PHYSICAL_TYPE> lst = new List<IMAPI_MEDIA_PHYSICAL_TYPE>(mediatypes.Length);
+                lst.AddRange(mediatypes);
+                lst.RemoveAt(mediatypes.Length - 1);
+                lst.RemoveAt(0);
+                _cbxMediaType.DataSource = lst;
+                //lst.Clear();
+                _cbxMediaType.SelectedItem= IMAPI_MEDIA_PHYSICAL_TYPE.IMAPI_MEDIA_TYPE_DISK;
+                About.InitSysMenu(this);
+            }
+            catch (System.Runtime.InteropServices.COMException ex)
+            {
+                if ((uint)ex.ErrorCode == 0x80040154)
+                {
+                    if (MessageBox.Show(this, "IMAPI2 is not installed on this machine.\nDo you want to install it?",
+        "Error", MessageBoxButtons.YesNo, MessageBoxIcon.Exclamation) == DialogResult.Yes)
+                        System.Diagnostics.Process.Start("Iexplore.exe", @"http://support.microsoft.com/kb/KB932716");
+                    else
+                        this.Close();
+                }
+
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+
+        }
+        event ImageRepository.CancelingHandler Stop;
+        delegate void ProgressBarHandler(int max);
+        // This event handler is where the actual,
+        // potentially time-consuming work is done.
+        private void backgroundWorker_DoWork(object sender,
+            DoWorkEventArgs e)
+        {
+            ISOFormatter frm = null;
+            try
+            {
+                e.Result = null;
+
+                IFileSystemImage ifsi = _repository as IFileSystemImage;
+
+                IFileSystemImageResult res = ifsi.CreateResultImage();
+                if (res == null)
+                    return;
+                frm = new ISOFormatter(e.Argument as string);
+
+                this.Stop += frm.CancelOp;
+
+                if (_repository.Update != null)
+                {
+                    DiscFormat2Data_Events ev = frm as DiscFormat2Data_Events;
+                    ev.Update += AsyncFormattingEvent;
+                }
+                frm.CreateFullImage(res);
+
+                e.Result = frm;
+            }
+            catch (System.Runtime.InteropServices.COMException ex)
+            {
+                if (ex.ErrorCode == -1062555360)
+                {
+                    throw new ApplicationException("Media size could be too small for the amount of data", ex);
+                }
+                else
+                    throw;
+            }
+            catch (Exception)
+            {
+
+                e.Result = null;
+            }
+            finally
+            {
+                e.Cancel = _backgroundWorker.CancellationPending;
+            }
+
+        }
+
+        private void _btnBuildFile_Click(object sender, EventArgs e)
+        {
+            if (_btnBuildFile.Text == "Cancel")
+            {
+                if (_ckWorker.Checked && _backgroundWorker.IsBusy)
+                {
+
+                    _backgroundWorker.CancelAsync();
+                }
+                this.Stop();
+
+                _btnBuildFile.Enabled = false;
+                Application.DoEvents();
+                return;
+            }
+
+            _tm.Reset();
+            _tm.Start();
+            _progBar.Value = 0;
+
+            IFileSystemImageResult imageResult = null;
+            ISOFormatter formatter = null;
+            try
+            {
+
+                if (_repository.Items.Count == 0)
+                {
+                    MessageBox.Show(this, "No items to archive");
+                    return;
+                }
+                if (string.IsNullOrEmpty(_lblDest.Text))
+                {
+                    MessageBox.Show(this, "No destination was selected","Warning");
+                    if (_saveFileDialog.ShowDialog(this) == DialogResult.OK)
+                    {
+                        _lblDest.Text = _saveFileDialog.FileName;
+                    }
+                    else
+                        return;
+                }
+
+                IFileSystemImage ifsi = InitRepository();
+                if (_ckWorker.Checked)
+                {
+                    _btnBuildFile.Enabled = true;
+                    _backgroundWorker.DoWork += new DoWorkEventHandler(backgroundWorker_DoWork);
+                    _backgroundWorker.RunWorkerCompleted += new RunWorkerCompletedEventHandler(RunWorkerCompletedEvent);
+                    _backgroundWorker.RunWorkerAsync(_lblDest.Text);
+                }
+                else
+                {
+                    _btnBuildFile.Enabled = true;
+                    Application.DoEvents();
+                    imageResult = ifsi.CreateResultImage();
+                    if (imageResult == null)
+                    {
+                        if (_repository.Cancel)
+                            _lblUpdate.Text = "Canceled on UI Thread";
+                        return;
+                    }
+
+                    formatter = new ISOFormatter(_lblDest.Text);
+
+                    this.Stop += formatter.CancelOp;
+
+                    DiscFormat2Data_Events ev = formatter as DiscFormat2Data_Events;
+                    if (_ckUseUIReport.Checked)
+                        ev.Update += FormattingEvent;
+                    formatter.CreateFullImage(imageResult);
+                    _tm.Stop();
+                    _lblUpdate.Text = formatter.Cancel ? "Canceled on UI Thread" :
+                         string.Format("Creating {1}  of size {2} on UI thread lasted {0}",
+                        _tm.Elapsed.ToString(), Path.GetFileName(_lblDest.Text), (new FileInfo(_lblDest.Text)).Length.ToString("#,#"));
+                }
+
+            }
+            catch (System.Runtime.InteropServices.COMException ex)
+            {
+                //MessageBox.Show(this, "unable to create image:" + ex.Message);
+                Console.Beep();
+                if (ex.ErrorCode == -1062555360)
+                {
+                    _lblUpdate.Text = "On UI Thread: Media size could be too small for the amount of data";
+                }
+                else
+                    _lblUpdate.Text = "On UI Thread: " + ex.Message;
+                File.Delete(_lblDest.Text);
+            }
+            catch (Exception ex)
+            {
+                if (!this.IsDisposed)
+                {
+                    if (_repository.Cancel)
+                        _lblUpdate.Text = "Canceled on UI thread";
+                    else
+                    {
+                        Console.Beep();
+                        _lblUpdate.Text = "Failed on UI thread: " + ex.Message;
+                    }
+                }
+                File.Delete(_lblDest.Text);
+            }
+            finally
+            {
+                if (_repository.Cancel)
+                    File.Delete(_lblDest.Text);
+                if (!_ckWorker.Checked)
+                    RestoreUI(formatter);
+
+            }
+        }
+
+        private IFileSystemImage InitRepository()
+        {
+            foreach (TabPage tab in _tabBuild.TabPages)
+            {
+
+                foreach (Control ctr in tab.Controls)
+                    ctr.Enabled = false; ;
+            }
+            _btnBuildFile.Text = "Cancel";
+            Application.DoEvents();
+            IFileSystemImage ifsi = _repository as IFileSystemImage;
+            FsiFileSystems fstype = FsiFileSystems.FsiFileSystemNone;
+            fstype |= _ckbISO9660.Checked ? FsiFileSystems.FsiFileSystemISO9660 : FsiFileSystems.FsiFileSystemNone;
+            fstype |= _ckbJoliet.Checked ? FsiFileSystems.FsiFileSystemJoliet : FsiFileSystems.FsiFileSystemNone;
+            fstype |= _ckbUDF.Checked ? FsiFileSystems.FsiFileSystemUDF : FsiFileSystems.FsiFileSystemNone;
+            ifsi.FileSystemsToCreate = fstype;
+
+            ifsi.ChooseImageDefaultsForMediaType((IMAPI_MEDIA_PHYSICAL_TYPE)_cbxMediaType.SelectedItem);
+            ifsi.VolumeName = _txtVolName.Text;
+
+            this.Stop += _repository.CancelOp;
+            try
+            {
+                if (_ckUseUIReport.Checked)
+                {
+                    if (_ckWorker.Checked)
+                        _repository.Update += new DiscFormat2Data_EventsHandler(AsyncRepositoryUpdate);
+                    else
+                        _repository.Update += new DiscFormat2Data_EventsHandler(RepositoryUpdate);
+                    this.Cursor = Cursors.WaitCursor;
+                    _lblUpdate.Text = string.Format("Calculating size for {0}...", _lblDest.Text);
+                    Application.DoEvents();
+#if DEBUG
+                    Stopwatch tm = new Stopwatch();
+                    tm.Start();
+#endif
+                    try
+                    {
+                        if (_ckWorker.Checked)
+                            _progBar.Style = ProgressBarStyle.Marquee;
+                        _repository.CalculateSizeBeforeFormatting();
+                    }
+                    finally
+                    {
+                        if (_ckWorker.Checked)
+                            _progBar.Style = ProgressBarStyle.Continuous;
+
+                    }
+#if DEBUG
+                    tm.Stop();
+                    System.Diagnostics.Debug.WriteLine(string.Format("CalculateSizeBeforeFormatting the image lasted {0} ms", tm.Elapsed.TotalMilliseconds.ToString("#,#")));
+#endif
+                }
+                else
+                {
+                    if (_ckWorker.Checked)
+                        _progBar.Style = ProgressBarStyle.Marquee;
+                    _lblUpdate.Text = string.Format("Creating {0}...", _lblDest.Text);
+                }
+            }
+            finally
+            {
+                this.Cursor = Cursors.Arrow;
+            }
+
+            return ifsi;
+        }
+
+        private void RestoreUI(ISOFormatter formatter)
+        {
+            if (_ckUseUIReport.Checked)
+            {
+                if (_ckWorker.Checked)
+                    _repository.Update -= new DiscFormat2Data_EventsHandler(AsyncRepositoryUpdate);
+                else
+                    _repository.Update -= new DiscFormat2Data_EventsHandler(RepositoryUpdate);
+            }
+
+            _btnBuildFile.Text = "&Build file";
+
+            if (formatter != null)
+            {
+                DiscFormat2Data_Events ev = formatter as DiscFormat2Data_Events;
+                if (ev != null)
+                {
+                    if (_ckUseUIReport.Checked)
+                    {
+                        if (_ckWorker.Checked)
+                            ev.Update -= AsyncFormattingEvent;
+                        else
+                            ev.Update -= FormattingEvent;
+                    }
+                    this.Stop -= formatter.CancelOp;
+                }
+
+                (formatter as IDisposable).Dispose();
+                formatter = null;
+            }
+
+
+            this.Stop -= _repository.CancelOp;
+
+            _repository.Reset();
+            foreach (TabPage tab in _tabBuild.TabPages)
+            {
+
+                foreach (Control ctr in tab.Controls)
+                    ctr.Enabled = true;
+            }
+
+            _tm.Reset();
+            if (_ckWorker.Checked)
+                _progBar.Style = ProgressBarStyle.Continuous;
+
+        }
+
+        void RunWorkerCompletedEvent(object sender, RunWorkerCompletedEventArgs e)
+        {
+
+            _backgroundWorker.DoWork -= new DoWorkEventHandler(backgroundWorker_DoWork);
+            _backgroundWorker.RunWorkerCompleted -= new RunWorkerCompletedEventHandler(RunWorkerCompletedEvent);
+            _tm.Stop();
+            if (e.Cancelled)
+            {
+                _lblUpdate.Text = "Canceled on the worker thread";
+                File.Delete(_lblDest.Text);
+            }
+            else
+                if (e.Error != null)
+                {
+                    Console.Beep();
+                    _lblUpdate.Text = "Err on the worker thread: " + e.Error.Message;
+                    File.Delete(_lblDest.Text);
+                }
+                else
+                    _lblUpdate.Text = string.Format("Creating {1}  of size {2} on worker thread lasted {0}",
+                        _tm.Elapsed.ToString(), Path.GetFileName(_lblDest.Text), (new FileInfo(_lblDest.Text)).Length.ToString("#,#"));
+            ISOFormatter frm = null;
+            if (!e.Cancelled && e.Error == null)
+                frm = e.Result as ISOFormatter;
+
+            RestoreUI(frm);
+
+        }
+
+        private void _openFileDialog_FileOk(object sender, CancelEventArgs e)
+        {
+            if (!_repository.AddNewFile(_openFileDialog.FileName))
+            {
+                MessageBox.Show(sender as IWin32Window, _openFileDialog.FileName + " is already added");
+                e.Cancel = true;
+            }
+        }
+
+
+
+        private void _btnAddFile_Click(object sender, EventArgs e)
+        {
+            if (_openFileDialog.ShowDialog(this) == DialogResult.OK)
+            {
+                string path = _openFileDialog.FileName;
+                _AddFile(path);
+
+            }
+
+        }
+
+        private void _AddFile(string path)
+        {
+            if (_repository.AddNewFile(path))
+            {
+                _bindingSource.ResetBindings(false);
+                List<FileSystemInfo> fli = _bindingSource.List as List<FileSystemInfo>;
+                for (int i = 0; i < fli.Count; i++)
+                {
+                    FileSystemInfo fi = fli[i];
+                    _dataGridView.Rows[i].Cells["Type"].Value = ((fi.Attributes & FileAttributes.Directory) == 0) ? "File" : "Folder";
+                }
+            }
+            else
+                Console.Beep();
+
+        }
+
+        private void _btnAddFolder_Click(object sender, EventArgs e)
+        {
+
+            if (_folderBrowserDialog.ShowDialog(this) == DialogResult.OK)
+            {
+                string path = _folderBrowserDialog.SelectedPath;
+                _AddFolder(path);
+            }
+
+        }
+
+        private void _AddFolder(string path)
+        {
+            if (!_repository.AddNewFolder(path))
+            {
+                Console.Beep();
+                MessageBox.Show(this, path + " is already added", "error", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+            }
+            else
+            {
+                _bindingSource.ResetBindings(false);
+                List<FileSystemInfo> fli = _bindingSource.List as List<FileSystemInfo>;
+                for (int i = 0; i < fli.Count; i++)
+                {
+                    FileSystemInfo fi = fli[i];
+                    _dataGridView.Rows[i].Cells["Type"].Value = ((fi.Attributes & FileAttributes.Directory) == 0) ? "File" : "Folder";
+                }
+
+            }
+        }
+
+        private void _SaveAs_Click(object sender, EventArgs e)
+        {
+            if (_saveFileDialog.ShowDialog(this) == DialogResult.OK)
+            {
+                _lblDest.Text = _saveFileDialog.FileName;
+            }
+        }
+
+
+        private void ISOBuilderForm_FormClosed(object sender, FormClosedEventArgs e)
+        {
+            if (Stop != null && Stop.GetInvocationList().Length > 0)
+                Stop();
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+
+            if (m.WParam.ToInt32() == About.IDM_ABOUT)
+            {
+                About dlg = new About(this);
+                dlg.ShowDialog();
+                dlg.Dispose();
+            }
+            base.WndProc(ref m);
+        }
+
+        private void _btnAbout_Click(object sender, EventArgs e)
+        {
+            About dlg = new About(this);
+            dlg.ShowDialog();
+            dlg.Dispose();
+        }
+
+        private void tabPage1_DragDrop(object sender, DragEventArgs e)
+        {
+            Array arr = (Array)e.Data.GetData(DataFormats.FileDrop);
+            if (arr != null && arr.Length > 0)
+            {
+                SetForegroundWindow(this.Handle);
+                string path = arr.GetValue(0) as string;
+                if (File.Exists(path))
+                {
+                    _AddFile(path);
+                }
+                else if (Directory.Exists(path))
+                {
+                    _AddFolder(path);
+                }
+            }
+        }
+
+        private void tabPage1_DragEnter(object sender, DragEventArgs e)
+        {
+            e.Effect = e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None;
+
+        }
+
+
+    }
+
+}
