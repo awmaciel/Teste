@@ -1,0 +1,66 @@
+public static void UserPassVbScript(string[] args)
+        {
+           
+                string user = "nix";
+                if (1 <= args.Length) { user = args[0]; };
+                string passw = "nix";
+                if (2 <= args.Length) { passw = args[1]; };
+                string cscript = "cscript";
+                string cmd = string.Format("\"C:\\Users\\awmac\\Desktop\\TesteReflection\\VbScript\\auth.vbs\" {0} {1}", user, passw);
+                System.Console.WriteLine("{0} {1}", cscript, cmd);
+
+                Process process = new Process();
+                process.StartInfo.UseShellExecute = false;
+                process.StartInfo.RedirectStandardOutput = true;
+                process.StartInfo.CreateNoWindow = true;
+                process.StartInfo.FileName = "cscript.exe";
+                process.StartInfo.Arguments = cmd;
+                try
+                {
+                    process.Start();
+                    System.Console.WriteLine(process.StandardOutput.ReadToEnd());
+                    System.Console.WriteLine(process.ExitCode);
+                }
+                catch (Exception ex)
+                {
+                    System.Console.WriteLine(ex.ToString());
+                }
+            }
+
+Option Explicit
+Dim URL
+Dim WshShell
+Dim nRet : nRet = 2
+Dim http
+
+If WScript.Arguments.Count = 2 Then
+   If "user" = WScript.Arguments(0) And "passw" = WScript.Arguments(1) Then
+      WScript.Echo "ok porra"
+      nRet = 0
+   Else
+      WScript.Echo "fail"
+      nRet = 1
+   End If
+Else
+   WScript.Echo "bad"
+End If
+
+
+Dim IE
+Set IE = CreateObject("InternetExplorer.Application")
+IE.visible = false
+IE.Navigate "http://www.mjtnet.com/"
+do while IE.busy = true
+loop
+dim i
+for i = 0 to IE.Document.Links.length - 1
+WScript.Echo IE.Document.Links.item(i).InnerText & vbCRLF & IE.Document.Links.Item(i).href
+next
+
+dim e
+Set e = IE.document.ElementFromPoint(20,30)
+WScript.Echo e.tagname & ":" & e.outerHTML
+
+WScript.Quit nRet
+
+https://stackoverflow.com/questions/11652890/vba-interaction-with-internet-explorer
