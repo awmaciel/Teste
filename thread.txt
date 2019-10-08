@@ -1,0 +1,21 @@
+for (int i = 0; i < 10; ++i)
+{
+    // doesn't work - somehow DoWork is invoked with i=10 each time!!!
+    ThreadPool.QueueUserWorkItem(delegate { DoWork("closure", i); });
+
+    // not type safe, but it works
+    ThreadPool.QueueUserWorkItem(new WaitCallback(DoWork), Tuple.Create("    WCB", i));
+}
+
+void DoWork(string s, int i)
+{
+    Console.WriteLine("{0} - i:{1}", s, i);
+}
+
+void DoWork(object state)
+{
+    var t = (Tuple<string, int>)state;
+    DoWork(t.Item1, t.Item2);
+}
+
+https://stackoverflow.com/questions/12977838/queueuserworkitem-with-delegate-does-not-work-but-waitcallback-does-work
