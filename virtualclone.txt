@@ -1,0 +1,25 @@
+ static void Main(string[] args)
+        {
+            RunVirtualCloneCD("\"C:\\Users\\awmac\\Desktop\\Projeto Utils\\fsdfdfsdfdsf.iso\"");
+            UmountVirtualCloneCD("\"C:\\Users\\awmac\\Desktop\\Projeto Utils\\fsdfdfsdfdsf.iso\"");
+        }
+
+        public static void RunVirtualCloneCD(string Path)
+        {
+
+            var processStartInfo = new System.Diagnostics.ProcessStartInfo();
+            processStartInfo.WorkingDirectory = @"C:\Program Files (x86)\Elaborate Bytes\\VirtualCloneDrive";
+            processStartInfo.FileName = "cmd.exe";
+            processStartInfo.Arguments = $"/C VCDMount.exe / d = 0 {Path}";
+            System.Diagnostics.Process proc = System.Diagnostics.Process.Start(processStartInfo);
+        }
+
+        public static void UmountVirtualCloneCD(string Path)
+        {
+            var processStartInfo = new System.Diagnostics.ProcessStartInfo();
+            processStartInfo.WorkingDirectory = @"C:\Program Files (x86)\Elaborate Bytes\\VirtualCloneDrive";
+            processStartInfo.FileName = "cmd.exe";
+            processStartInfo.Arguments = $"/C VCDMount.exe / u d = 0 {Path}";
+            System.Diagnostics.Process proc = System.Diagnostics.Process.Start(processStartInfo);
+        
+        }
